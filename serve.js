@@ -2,7 +2,6 @@ const os = require("node:os");
 const fs = require("fs");
 const http = require("node:http");
 const cluster = require("node:cluster");
-const yargs = require("yargs");
 const path = require("path");
 const which = require("which");
 const { spawn } = require("child_process");
@@ -22,45 +21,15 @@ const MIME_TYPES = {
 	ico: "image/x-icon",
 	svg: "image/svg+xml",
 };
-const PATH_CHROME = ["C:/Program Files/Google/Chrome/Application", "C:/Program Files/Chromium/Application"].join(";");
 
 let proxy = undefined;
 let browser = undefined;
 
-proto_dirs = fs.readdirSync(PROTO_DIR).reverse();
+const proto_dirs = fs.readdirSync(PROTO_DIR).reverse();
 
-const argv = yargs(process.argv.slice(2))
-	.usage("Usage: $0 [-v 18.4] [-p 9220] [-t 4]")
-	.option("proto", {
-		alias: ["v"],
-		describe: "iOS Protocol Version",
-		choices: proto_dirs,
-		default: proto_dirs[0],
-	})
-	.option("port", {
-		alias: "p",
-		describe: "Port number to serve frontend on",
-		default: 9920,
-	})
-	.option("threads", {
-		alias: "t",
-		describe: "Thread concurrency of web server",
-		default: Math.min(4, os.availableParallelism()),
-	})
-	.option("proxy", {
-		alias: "x",
-		describe: `Full path to ${PROXY_BIN}`,
-	})
-	.option("browser", {
-		alias: "b",
-		describe: "Browser executable to launch automatically (if provided)",
-	})
-	.help("help")
-	.parse();
-
-const threads = argv.threads;
-const port = argv.port;
-const proto = argv.proto;
+const threads = Math.min(4, os.availableParallelism());
+const port = 9920;
+const proto = proto_dirs[0];
 
 if (cluster.isPrimary) {
 	console.log(`Primary ${process.pid} is running`);
@@ -77,7 +46,7 @@ if (cluster.isPrimary) {
 	const proxy_url = `http://localhost:9221`;
 
 	try {
-		const proxy_bin = argv.proxy || which.sync(PROXY_BIN, { path: `${PATH_NODE};${process.env.PATH}` });
+		const proxy_bin = which.sync(PROXY_BIN, { path: `${PATH_NODE};${process.env.PATH}` });
 		proxy = spawn(proxy_bin, ["-f", frontend], { stdio: "inherit" });
 	} catch (reason) {
 		console.error(`ERROR: ${reason.message}. Install or make it available in PATH before running the server.`);
@@ -90,12 +59,6 @@ if (cluster.isPrimary) {
 	setTimeout(() => {
 		console.log(`▷ Webkit Frontend: ${frontend}`);
 		console.log(`▷ iOS Debug Proxy: ${proxy_url} ◁ Start Here`);
-		if (argv.browser) {
-			const bin = argv.browser;
-			const browser_bin = fs.existsSync(bin) ? bin : which.sync(bin, { path: `${process.env.PATH};${PATH_CHROME}` });
-			console.log(`Launching browser ${browser_bin}`);
-			browser = spawn(browser_bin, [`--app=${proxy_url}`], { detached: true });
-		}
 	}, 1500);
 
 	process.on("SIGINT", () => {
